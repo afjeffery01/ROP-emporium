@@ -1,0 +1,21 @@
+arg1:	0xdeadbeefdeadbeef
+arg2:	0xcafebabecafebabe
+arg3:	0xd00df00dd00df00d
+
+reloc:	callme_one	0x00601040
+reloc:	callme_two	0x00601050
+reloc:	callme_three	0x00601028
+
+pop_rdi: 0x0040093c
+pop_rsi: 0x0040093d
+pop_rdx: 0x0040093e
+ret:	 0x0040093f
+
+NOTES:
+
+rdi: First arg register
+rsi: Second arg register
+rdx: Third arg register
+rcx: Fourth arg register
+r8:  Fifth arg register
+r9:  Sixth arg register

